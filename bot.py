@@ -1,14 +1,21 @@
 import telebot
 import requests
 from pymongo import MongoClient
+import os
+from dotenv import load_dotenv
+
+# Load .env file
+load_dotenv()
 
 # MongoDB connection
-client = MongoClient("MONGO_URL")
+MONGO_URL = os.getenv("MONGO_URL")
+client = MongoClient(MONGO_URL)
 db = client.bdshortner
 users = db.users
 
 # Bot token
-bot = telebot.TeleBot("BOT_TOKEN")
+BOT_TOKEN = os.getenv("BOT_TOKEN")
+bot = telebot.TeleBot(BOT_TOKEN)
 
 @bot.message_handler(commands=['start'])
 def send_welcome(message):
