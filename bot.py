@@ -1,7 +1,8 @@
+import os
 import telebot
 import requests
+from flask import Flask, request
 from pymongo import MongoClient
-import os
 from dotenv import load_dotenv
 
 # Load .env file
@@ -17,16 +18,19 @@ users = db.users
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 bot = telebot.TeleBot(BOT_TOKEN)
 
+# Flask server setup for webhook
+app = Flask(__name__)
+
+@app.route(f"/{BOT_TOKEN}", methods=['POST'])
+def receive_update():
+    json_str = request.get_data(as_text=True)
+    update = telebot.types.Update.de_json(json_str)
+    bot.process_new_updates([update])
+    return '!', 200
+
 @bot.message_handler(commands=['start'])
 def send_welcome(message):
-    bot_name = bot.get_me().first_name  # বটের প্রথম নাম নেওয়া
-    bot.reply_to(message, f"Hi {message.from_user.first_name}, I am {bot_name}, the BDSHORTNER Bulk Link Converter BOT. I can convert links & post directly from your BDSHORTNER account☺️\n\n"
-                          "🔰 Go To https://bdshortner.com/member/tools/api\n"
-                          "🔰 Then Copy API Key\n"
-                          "🔰 Then Type /api then give a single space and then paste your API Key\n\n"
-                          "(See Example.👇)\n"
-                          "Example: /api 04e8e1b5f12456a64c8f33195ac\n\n"
-                          "💁‍♀️ Hit 👉 /help To get help")
+    bot.reply_to(message, f"Hi {message.from_user.first_name}, welcome to BD SHORTNER bot!")
 
 # Add API command
 @bot.message_handler(commands=['add_api'])
@@ -94,36 +98,6 @@ def disable_picture(message):
     users.update_one({"user_id": user_id}, {"$set": {"picture_enabled": False}}, upsert=True)
     bot.reply_to(message, "Picture/Video inclusion disabled.")
 
-# Change Language command
-@bot.message_handler(commands=['change_language'])
-def change_language(message):
-    user_id = message.from_user.id
-    language = message.text.split()[1]
-    users.update_one({"user_id": user_id}, {"$set": {"language": language}}, upsert=True)
-    bot.reply_to(message, f"Language changed to {language}.")
-
-# Get My ID command
-@bot.message_handler(commands=['getmyid'])
-def get_my_id(message):
-    bot.reply_to(message, f"Your Telegram ID is: {message.from_user.id}")
-
-# Help command
-@bot.message_handler(commands=['help'])
-def help_command(message):
-    bot.reply_to(message, "Contact support at: support@bdshortner.com")
-
-def main_convertor_handler(message, user, short_url, long_url):
-    # Initialize reply text with the shortened URL
-    reply_text = f"Shortened link: {short_url}"
-    
-    # Check if user wants text and footer
-    if user.get("text_enabled", True):
-        reply_text += f"\nOriginal URL: {long_url}"
-    if "footer" in user:
-        reply_text += f"\n{user['footer']}"
-    
-    bot.reply_to(message, reply_text)
-
 # Shorten link function (automatic shortening)
 @bot.message_handler(func=lambda message: True)
 def shorten_link(message):
@@ -135,11 +109,22 @@ def shorten_link(message):
         short_url = response.json().get('shortenedUrl')
         
         if short_url:
-            main_convertor_handler(message, user, short_url, long_url)
+            reply_text = f"Shortened link: {short_url}"
+            if user.get("text_enabled", True):
+                reply_text += f"\nOriginal URL: {long_url}"
+            if "footer" in user:
+                reply_text += f"\n{user['footer']}"
+            bot.reply_to(message, reply_text)
         else:
             bot.reply_to(message, "Error shortening the link. Please try again.")
     else:
         bot.reply_to(message, "Please add your API key using /add_api command.")
 
-# Run the bot
-bot.polling()
+# Start Flask server
+if __name__ == "__main__":
+    webhook_url = os.getenv("WEBHOOK_URL")  # Use Koyeb's provided URL
+    bot.remove_webhook()
+    bot.set_webhook(url=f"{webhook_url}/{BOT_TOKEN}")
+    
+    # Run the Flask server
+    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 8080)))
