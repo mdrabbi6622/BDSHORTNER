@@ -3,17 +3,23 @@ import requests
 from pymongo import MongoClient
 
 # MongoDB connection
-client = MongoClient("mongodb+srv://bdshortner:<db_password>@bdshortner.zumyg.mongodb.net/?retryWrites=true&w=majority")
+client = MongoClient("MONGO_URL")
 db = client.bdshortner
 users = db.users
 
 # Bot token
-bot = telebot.TeleBot("7388913440:AAEB2QOupsUOpYUPdQ6DGJlZfMA8hypHaNo")
+bot = telebot.TeleBot("BOT_TOKEN")
 
-# Start command
 @bot.message_handler(commands=['start'])
 def send_welcome(message):
-    bot.reply_to(message, "Welcome to BDShortner Bot! Use /add_api to link your account and start shortening links.")
+    bot_name = bot.get_me().first_name  # বটের প্রথম নাম নেওয়া
+    bot.reply_to(message, f"Hi {message.from_user.first_name}, I am {bot_name}, the BDSHORTNER Bulk Link Converter BOT. I can convert links & post directly from your BDSHORTNER account☺️\n\n"
+                          "🔰 Go To https://bdshortner.com/member/tools/api\n"
+                          "🔰 Then Copy API Key\n"
+                          "🔰 Then Type /api then give a single space and then paste your API Key\n\n"
+                          "(See Example.👇)\n"
+                          "Example: /api 04e8e1b5f12456a64c8f33195ac\n\n"
+                          "💁‍♀️ Hit 👉 /help To get help")
 
 # Add API command
 @bot.message_handler(commands=['add_api'])
@@ -99,6 +105,18 @@ def get_my_id(message):
 def help_command(message):
     bot.reply_to(message, "Contact support at: support@bdshortner.com")
 
+def main_convertor_handler(message, user, short_url, long_url):
+    # Initialize reply text with the shortened URL
+    reply_text = f"Shortened link: {short_url}"
+    
+    # Check if user wants text and footer
+    if user.get("text_enabled", True):
+        reply_text += f"\nOriginal URL: {long_url}"
+    if "footer" in user:
+        reply_text += f"\n{user['footer']}"
+    
+    bot.reply_to(message, reply_text)
+
 # Shorten link function (automatic shortening)
 @bot.message_handler(func=lambda message: True)
 def shorten_link(message):
@@ -107,16 +125,12 @@ def shorten_link(message):
         api_key = user["api_key"]
         long_url = message.text
         response = requests.get(f"https://bdshortner.com/api?api={api_key}&url={long_url}")
-        short_url = response.json()['shortenedUrl']
-
-        # Check if user wants text and footer
-        reply_text = f"Shortened link: {short_url}"
-        if user.get("text_enabled", True):
-            reply_text += f"\nOriginal URL: {long_url}"
-        if "footer" in user:
-            reply_text += f"\n{user['footer']}"
-
-        bot.reply_to(message, reply_text)
+        short_url = response.json().get('shortenedUrl')
+        
+        if short_url:
+            main_convertor_handler(message, user, short_url, long_url)
+        else:
+            bot.reply_to(message, "Error shortening the link. Please try again.")
     else:
         bot.reply_to(message, "Please add your API key using /add_api command.")
 
